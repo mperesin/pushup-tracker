@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Family Push-Up Crew</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Bebas+Neue&display=swap" rel="stylesheet"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#0a0a0a;color:#e8e8e8;font-family:'DM Mono',monospace;min-height:100vh}
@@ -19,23 +21,41 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
 <body>
 <div id="root"><div style="min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:28px;color:#f59e0b;letter-spacing:3px">LOADING...</div></div>
 <script>
-var SHARED_KEY="family-pushup-shared";
+firebase.initializeApp({
+  apiKey:"AIzaSyDrpf1Io68kKQ3_PiGUQnKb5CoVa0MVBO8",
+  authDomain:"pushups-for-life.firebaseapp.com",
+  projectId:"pushups-for-life",
+  storageBucket:"pushups-for-life.firebasestorage.app",
+  messagingSenderId:"1048355531576",
+  appId:"1:1048355531576:web:7d91a48efb580e8be6afcd"
+});
+var db=firebase.firestore();
 var SESSION_KEY="family-pushup-session";
 var COLORS=["#f59e0b","#3b82f6","#f43f5e","#a855f7","#10b981","#fb923c","#06b6d4","#ec4899"];
-
-function loadShared(){try{var r=localStorage.getItem(SHARED_KEY);return r?JSON.parse(r):{users:{},groupChallenge:{goal:1000,name:"Family Challenge"}}}catch(e){return{users:{},groupChallenge:{goal:1000,name:"Family Challenge"}}}}
-function saveShared(d){try{localStorage.setItem(SHARED_KEY,JSON.stringify(d))}catch(e){}}
-function getSession(){try{return localStorage.getItem(SESSION_KEY)||null}catch(e){return null}}
-function setSession(n){try{localStorage.setItem(SESSION_KEY,n)}catch(e){}}
-function clearSession(){try{localStorage.removeItem(SESSION_KEY)}catch(e){}}
-function todayKey(){return new Date().toISOString().split("T")[0]}
-function memberColor(name,allNames){return COLORS[allNames.slice().sort().indexOf(name)%COLORS.length]}
-
-var shared=loadShared();
-var currentUser=getSession();
+var shared={users:{},groupChallenge:{goal:1000,name:"Family Challenge"}};
+var currentUser=localStorage.getItem(SESSION_KEY)||null;
 var currentView="today";
 var justCelebrated=false;
 var prevTodayCount=0;
+var unsubscribe=null;
+
+function memberColor(name,allNames){return COLORS[allNames.slice().sort().indexOf(name)%COLORS.length];}
+function todayKey(){return new Date().toISOString().split("T")[0];}
+
+function saveToFirebase(){
+  return db.collection("family").doc("shared").set(shared);
+}
+
+function startListening(){
+  if(unsubscribe)unsubscribe();
+  unsubscribe=db.collection("family").doc("shared").onSnapshot(function(snap){
+    if(snap.exists){shared=snap.data();}
+    render();
+  },function(err){
+    console.error("Firebase error:",err);
+    render();
+  });
+}
 
 function el(tag,props,children){
   var e=document.createElement(tag);
@@ -95,31 +115,13 @@ function getStats(){
   var log=(shared.users[currentUser]||{}).log||{};
   var now=new Date();
   var week=[];
-  for(var i=0;i<7;i++){
-    var d=new Date(now);d.setDate(d.getDate()-(6-i));
-    var k=d.toISOString().split("T")[0];
-    week.push({label:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()],count:log[k]||0,key:k});
-  }
+  for(var i=0;i<7;i++){var d=new Date(now);d.setDate(d.getDate()-(6-i));var k=d.toISOString().split("T")[0];week.push({label:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()],count:log[k]||0,key:k});}
   var weeks=[];
-  for(var i=0;i<4;i++){
-    var s2=new Date(now);s2.setDate(s2.getDate()-s2.getDay()-i*7);
-    var total=0;
-    for(var j=0;j<7;j++){var d2=new Date(s2);d2.setDate(s2.getDate()+j);total+=log[d2.toISOString().split("T")[0]]||0;}
-    weeks.unshift({label:"W"+(4-i),total:total});
-  }
-  var monthTotal=0;
-  for(var i=0;i<now.getDate();i++){
-    var d3=new Date(now.getFullYear(),now.getMonth(),i+1);
-    monthTotal+=log[d3.toISOString().split("T")[0]]||0;
-  }
+  for(var i=0;i<4;i++){var s2=new Date(now);s2.setDate(s2.getDate()-s2.getDay()-i*7);var total=0;for(var j=0;j<7;j++){var d2=new Date(s2);d2.setDate(s2.getDate()+j);total+=log[d2.toISOString().split("T")[0]]||0;}weeks.unshift({label:"W"+(4-i),total:total});}
+  var monthTotal=0;for(var i=0;i<now.getDate();i++){var d3=new Date(now.getFullYear(),now.getMonth(),i+1);monthTotal+=log[d3.toISOString().split("T")[0]]||0;}
   var yearMonths=[];
-  for(var m=0;m<=now.getMonth();m++){
-    var yt=0;var days=new Date(now.getFullYear(),m+1,0).getDate();
-    for(var d4=1;d4<=days;d4++){yt+=log[now.getFullYear()+"-"+String(m+1).padStart(2,"0")+"-"+String(d4).padStart(2,"0")]||0;}
-    yearMonths.push({label:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][m],total:yt});
-  }
-  var yearTotal=yearMonths.reduce(function(a,b){return a+b.total;},0);
-  return{week:week,weeks:weeks,monthTotal:monthTotal,yearTotal:yearTotal,yearMonths:yearMonths};
+  for(var m=0;m<=now.getMonth();m++){var yt=0;var days=new Date(now.getFullYear(),m+1,0).getDate();for(var d4=1;d4<=days;d4++){yt+=log[now.getFullYear()+"-"+String(m+1).padStart(2,"0")+"-"+String(d4).padStart(2,"0")]||0;}yearMonths.push({label:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][m],total:yt});}
+  return{week:week,weeks:weeks,monthTotal:monthTotal,yearTotal:yearMonths.reduce(function(a,b){return a+b.total;},0),yearMonths:yearMonths};
 }
 
 function updateMy(fn){
@@ -127,8 +129,7 @@ function updateMy(fn){
   var newUsers=Object.assign({},shared.users);
   newUsers[currentUser]=fn(prev);
   shared=Object.assign({},shared,{users:newUsers});
-  saveShared(shared);
-  render();
+  saveToFirebase();
 }
 
 function renderLogin(){
@@ -177,22 +178,23 @@ function renderLogin(){
 }
 
 function doLogin(name){
-  setSession(name);currentUser=name;justCelebrated=false;prevTodayCount=0;
+  localStorage.setItem(SESSION_KEY,name);
+  currentUser=name;justCelebrated=false;prevTodayCount=0;
   if(!shared.users[name]){
     var newUsers=Object.assign({},shared.users);
     newUsers[name]={goal:50,log:{}};
     shared=Object.assign({},shared,{users:newUsers});
-    saveShared(shared);
+    saveToFirebase();
+  } else {
+    render();
   }
-  render();
 }
 
 function renderNav(myColor){
   var nav=el("div",{style:{display:"flex",gap:"2px",margin:"16px 20px 0",background:"#111",borderRadius:"8px",padding:"3px",width:"calc(100% - 40px)",maxWidth:"414px"}});
   ["today","week","month","year","crew"].forEach(function(v){
     var active=currentView===v;
-    var btn=el("button",{style:{flex:"1",padding:"8px 0",border:"none",borderRadius:"6px",background:active?(v==="crew"?myColor:"#f59e0b"):"transparent",color:active?"#0a0a0a":(v==="crew"?myColor:"#555"),fontFamily:"inherit",fontSize:"10px",fontWeight:"700",cursor:"pointer",textTransform:"uppercase"},onClick:function(){currentView=v;render();}},[v==="crew"?"crew":v]);
-    nav.appendChild(btn);
+    nav.appendChild(el("button",{style:{flex:"1",padding:"8px 0",border:"none",borderRadius:"6px",background:active?(v==="crew"?myColor:"#f59e0b"):"transparent",color:active?"#0a0a0a":(v==="crew"?myColor:"#555"),fontFamily:"inherit",fontSize:"10px",fontWeight:"700",cursor:"pointer",textTransform:"uppercase"},onClick:function(){currentView=v;render();}},[v==="crew"?"crew":v]));
   });
   return nav;
 }
@@ -218,12 +220,10 @@ function renderToday(myColor){
   var bar=el("div",{style:{background:"#1a1a1a",borderRadius:"12px",height:"12px",overflow:"hidden",marginBottom:"8px"}});
   bar.appendChild(el("div",{style:{height:"100%",width:pct+"%",background:goalHit?"linear-gradient(90deg,#10b981,#34d399)":"linear-gradient(90deg,"+myColor+","+myColor+"bb)",borderRadius:"12px",transition:"width 0.5s ease"}}));
   wrap.appendChild(bar);
-  wrap.appendChild(el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:"10px",color:"#444",marginBottom:"22px"}},[
-    el("span",{},[Math.round(pct)+"% complete"]),el("span",{},[Math.max(goal-todayCount,0)+" to go"])
-  ]));
+  wrap.appendChild(el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:"10px",color:"#444",marginBottom:"22px"}},[el("span",{},[Math.round(pct)+"% complete"]),el("span",{},[Math.max(goal-todayCount,0)+" to go"])]));
   if(goalHit){
     wrap.appendChild(el("div",{style:{background:"linear-gradient(135deg,#052e16,#064e3b)",border:"1px solid #10b98133",borderRadius:"16px",padding:"20px 24px",marginBottom:"22px",textAlign:"center"}},[
-      el("div",{style:{fontSize:"28px",marginBottom:"4px"}},["trophy"]),
+      el("div",{style:{fontSize:"28px",marginBottom:"4px"}},["🏆"]),
       el("div",{style:{fontFamily:"'Bebas Neue'",fontSize:"22px",color:"#10b981",letterSpacing:"2px"}},["GOAL CRUSHED!"]),
       el("div",{style:{fontSize:"12px",color:"#6ee7b7",marginTop:"4px"}},[todayCount>goal?(todayCount-goal)+" reps above your goal. Beast mode.":"You hit your target. Well done!"])
     ]));
@@ -249,12 +249,10 @@ function renderToday(myColor){
 
 function renderWeek(myColor){
   var stats=getStats();var week=stats.week;
-  var myData=shared.users[currentUser]||{goal:50,log:{}};
-  var goal=myData.goal||50;
-  var today=todayKey();
+  var myData=shared.users[currentUser]||{goal:50,log:{}};var goal=myData.goal||50;var today=todayKey();
   var total=week.reduce(function(a,b){return a+b.count;},0);
   var maxVal=goal;week.forEach(function(d){if(d.count>maxVal)maxVal=d.count;});
-  var wrap=el("div",{style:{width:"100%",maxWidth:"420px",padding:"24px 20px 0",animation:"slideUp 0.3s ease"}});
+  var wrap=el("div",{style:{width:"100%",maxWidth:"420px",padding:"24px 20px 0"}});
   wrap.appendChild(el("div",{style:{fontSize:"11px",color:"#444",letterSpacing:"0.15em",marginBottom:"4px"}},["THIS WEEK"]));
   wrap.appendChild(el("div",{style:{fontFamily:"'Bebas Neue'",fontSize:"40px",color:myColor,marginBottom:"24px"}},[total+" REPS"]));
   var bars=el("div",{style:{display:"flex",gap:"6px",alignItems:"flex-end",background:"#0f0f0f",borderRadius:"16px",padding:"20px 16px 12px"}});
@@ -262,45 +260,39 @@ function renderWeek(myColor){
   wrap.appendChild(bars);
   var grid=el("div",{style:{marginTop:"24px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px"}});
   var bestDay=0;week.forEach(function(d){if(d.count>bestDay)bestDay=d.count;});
-  var goalDays=week.filter(function(d){return d.count>=goal;}).length;
-  [StatCard("Weekly total",total,"reps",myColor),StatCard("Daily avg",Math.round(total/7),"reps/day",myColor),StatCard("Best day",bestDay,"reps",myColor),StatCard("Goal days",goalDays,"/ 7","#10b981")].forEach(function(c){grid.appendChild(c);});
-  wrap.appendChild(grid);
-  return wrap;
+  [StatCard("Weekly total",total,"reps",myColor),StatCard("Daily avg",Math.round(total/7),"reps/day",myColor),StatCard("Best day",bestDay,"reps",myColor),StatCard("Goal days",week.filter(function(d){return d.count>=goal;}).length,"/ 7","#10b981")].forEach(function(c){grid.appendChild(c);});
+  wrap.appendChild(grid);return wrap;
 }
 
 function renderMonth(myColor){
   var stats=getStats();var weeks=stats.weeks;var monthTotal=stats.monthTotal;
   var myData=shared.users[currentUser]||{goal:50,log:{}};var goal=myData.goal||50;
   var maxVal=goal*7;weeks.forEach(function(w){if(w.total>maxVal)maxVal=w.total;});
-  var wrap=el("div",{style:{width:"100%",maxWidth:"420px",padding:"24px 20px 0",animation:"slideUp 0.3s ease"}});
+  var wrap=el("div",{style:{width:"100%",maxWidth:"420px",padding:"24px 20px 0"}});
   wrap.appendChild(el("div",{style:{fontSize:"11px",color:"#444",letterSpacing:"0.15em",marginBottom:"4px"}},["THIS MONTH"]));
   wrap.appendChild(el("div",{style:{fontFamily:"'Bebas Neue'",fontSize:"40px",color:myColor,marginBottom:"24px"}},[monthTotal+" REPS"]));
   var bars=el("div",{style:{display:"flex",gap:"3px",alignItems:"flex-end",background:"#0f0f0f",borderRadius:"16px",padding:"20px 12px 12px"}});
   weeks.forEach(function(w){bars.appendChild(BarEl(w.total,maxVal,myColor,w.label,goal*7));});
   wrap.appendChild(bars);
   var grid=el("div",{style:{marginTop:"24px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px"}});
-  var goalWks=weeks.filter(function(w){return w.total>=goal*7;}).length;
-  [StatCard("Monthly total",monthTotal,"reps",myColor),StatCard("Weekly avg",Math.round(monthTotal/4),"reps/wk",myColor),StatCard("Goal weeks",goalWks,"/ 4 wks","#10b981"),StatCard("Daily avg",Math.round(monthTotal/new Date().getDate()),"reps/day",myColor)].forEach(function(c){grid.appendChild(c);});
-  wrap.appendChild(grid);
-  return wrap;
+  [StatCard("Monthly total",monthTotal,"reps",myColor),StatCard("Weekly avg",Math.round(monthTotal/4),"reps/wk",myColor),StatCard("Goal weeks",weeks.filter(function(w){return w.total>=goal*7;}).length,"/ 4 wks","#10b981"),StatCard("Daily avg",Math.round(monthTotal/new Date().getDate()),"reps/day",myColor)].forEach(function(c){grid.appendChild(c);});
+  wrap.appendChild(grid);return wrap;
 }
 
 function renderYear(myColor){
   var stats=getStats();var yearMonths=stats.yearMonths;var yearTotal=stats.yearTotal;
   var maxVal=1;yearMonths.forEach(function(m){if(m.total>maxVal)maxVal=m.total;});
-  var wrap=el("div",{style:{width:"100%",maxWidth:"420px",padding:"24px 20px 0",animation:"slideUp 0.3s ease"}});
+  var wrap=el("div",{style:{width:"100%",maxWidth:"420px",padding:"24px 20px 0"}});
   wrap.appendChild(el("div",{style:{fontSize:"11px",color:"#444",letterSpacing:"0.15em",marginBottom:"4px"}},["THIS YEAR"]));
   wrap.appendChild(el("div",{style:{fontFamily:"'Bebas Neue'",fontSize:"40px",color:myColor,marginBottom:"24px"}},[yearTotal.toLocaleString()+" REPS"]));
   var bars=el("div",{style:{display:"flex",gap:"4px",alignItems:"flex-end",background:"#0f0f0f",borderRadius:"16px",padding:"20px 12px 12px",overflowX:"auto"}});
   yearMonths.forEach(function(m){bars.appendChild(BarEl(m.total,maxVal,myColor,m.label));});
   wrap.appendChild(bars);
   var grid=el("div",{style:{marginTop:"24px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px"}});
-  var pace=Math.round(yearTotal/(new Date().getDate()+new Date().getMonth()*30.4)*365);
   var bestMo=0;yearMonths.forEach(function(m){if(m.total>bestMo)bestMo=m.total;});
-  var moAvg=Math.round(yearTotal/Math.max(new Date().getMonth()+1,1));
-  [StatCard("Year total",yearTotal.toLocaleString(),"reps",myColor),StatCard("Monthly avg",moAvg,"reps/mo",myColor),StatCard("Best month",bestMo,"reps",myColor),StatCard("On pace for",pace.toLocaleString(),"/ yr","#10b981")].forEach(function(c){grid.appendChild(c);});
-  wrap.appendChild(grid);
-  return wrap;
+  var pace=Math.round(yearTotal/(new Date().getDate()+new Date().getMonth()*30.4)*365);
+  [StatCard("Year total",yearTotal.toLocaleString(),"reps",myColor),StatCard("Monthly avg",Math.round(yearTotal/Math.max(new Date().getMonth()+1,1)),"reps/mo",myColor),StatCard("Best month",bestMo,"reps",myColor),StatCard("On pace for",pace.toLocaleString(),"/ yr","#10b981")].forEach(function(c){grid.appendChild(c);});
+  wrap.appendChild(grid);return wrap;
 }
 
 function renderCrew(myColor){
@@ -309,21 +301,20 @@ function renderCrew(myColor){
   var challenge=shared.groupChallenge||{goal:1000,name:"Family Challenge"};
   if(allNames.length<2){
     var wrap=el("div",{style:{width:"100%",maxWidth:"420px",padding:"40px 20px 0",textAlign:"center"}});
-    wrap.appendChild(el("div",{style:{fontSize:"48px",marginBottom:"16px"}},["family"]));
+    wrap.appendChild(el("div",{style:{fontSize:"48px",marginBottom:"16px"}},["👨‍👩‍👧‍👦"]));
     wrap.appendChild(el("div",{style:{fontFamily:"'Bebas Neue'",fontSize:"28px",color:myColor,letterSpacing:"2px",marginBottom:"12px"}},["INVITE YOUR CREW"]));
-    wrap.appendChild(el("div",{style:{fontSize:"13px",color:"#555",lineHeight:"1.6",marginBottom:"24px"}},["Share this link with your family so they can join:"]));
+    wrap.appendChild(el("div",{style:{fontSize:"13px",color:"#555",lineHeight:"1.6",marginBottom:"24px"}},["Share this link with your family:"]));
     wrap.appendChild(el("div",{style:{background:"#111",border:"1px solid #2a2a2a",borderRadius:"12px",padding:"14px 16px",fontSize:"12px",color:"#f59e0b",wordBreak:"break-all",marginBottom:"12px"}},[window.location.href]));
-    wrap.appendChild(el("div",{style:{fontSize:"11px",color:"#333"}},["Once they sign in with their name, you'll see the leaderboard here!"]));
+    wrap.appendChild(el("div",{style:{fontSize:"11px",color:"#333"}},["Once they sign in, you'll see the leaderboard here!"]));
     return wrap;
   }
   var members=[];
   Object.keys(shared.users).forEach(function(name){
     var ud=shared.users[name];var log=ud.log||{};
-    var todayReps=log[today]||0;var goal=ud.goal||50;
-    var weekTotal=0;
-    for(var i=0;i<7;i++){var d=new Date(now);d.setDate(d.getDate()-i);weekTotal+=log[d.toISOString().split("T")[0]]||0;}
+    var todayReps=log[today]||0;var ugoal=ud.goal||50;
+    var weekTotal=0;for(var i=0;i<7;i++){var d=new Date(now);d.setDate(d.getDate()-i);weekTotal+=log[d.toISOString().split("T")[0]]||0;}
     var allReps=Object.values(log).reduce(function(a,b){return a+b;},0);
-    members.push({name:name,todayReps:todayReps,goal:goal,weekTotal:weekTotal,allReps:allReps,color:memberColor(name,allNames)});
+    members.push({name:name,todayReps:todayReps,goal:ugoal,weekTotal:weekTotal,allReps:allReps,color:memberColor(name,allNames)});
   });
   members.sort(function(a,b){return b.todayReps-a.todayReps;});
   var groupTotal=members.reduce(function(a,m){return a+m.allReps;},0);
@@ -333,11 +324,8 @@ function renderCrew(myColor){
   var wrap=el("div",{style:{width:"100%",maxWidth:"420px",padding:"24px 20px 0"}});
   var card=el("div",{style:{background:groupHit?"linear-gradient(135deg,#052e16,#064e3b)":"#0f0f0f",border:"1px solid "+(groupHit?"#10b98133":"#2a2a2a"),borderRadius:"16px",padding:"20px",marginBottom:"20px"}});
   var ch=el("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"14px"}});
-  ch.appendChild(el("div",{},[
-    el("div",{style:{fontSize:"10px",color:"#444",letterSpacing:"0.15em",marginBottom:"4px"}},["GROUP CHALLENGE"]),
-    el("div",{style:{fontFamily:"'Bebas Neue'",fontSize:"20px",color:groupHit?"#10b981":"#e8e8e8",letterSpacing:"1px"}},[challenge.name])
-  ]));
-  ch.appendChild(el("button",{style:{background:"none",border:"1px solid #2a2a2a",color:"#444",fontFamily:"inherit",fontSize:"11px",padding:"4px 10px",borderRadius:"6px",cursor:"pointer"},onClick:function(){var n=prompt("Challenge name:",challenge.name);var g=parseInt(prompt("Goal (total reps):",String(challenge.goal)));if(g>0){shared=Object.assign({},shared,{groupChallenge:{goal:g,name:n||challenge.name}});saveShared(shared);render();}}},["Edit"]));
+  ch.appendChild(el("div",{},[el("div",{style:{fontSize:"10px",color:"#444",letterSpacing:"0.15em",marginBottom:"4px"}},["GROUP CHALLENGE"]),el("div",{style:{fontFamily:"'Bebas Neue'",fontSize:"20px",color:groupHit?"#10b981":"#e8e8e8",letterSpacing:"1px"}},[challenge.name])]));
+  ch.appendChild(el("button",{style:{background:"none",border:"1px solid #2a2a2a",color:"#444",fontFamily:"inherit",fontSize:"11px",padding:"4px 10px",borderRadius:"6px",cursor:"pointer"},onClick:function(){var n=prompt("Challenge name:",challenge.name);var g=parseInt(prompt("Goal (total reps):",String(challenge.goal)));if(g>0){shared=Object.assign({},shared,{groupChallenge:{goal:g,name:n||challenge.name}});saveToFirebase();}}},["Edit"]));
   card.appendChild(ch);
   var nums=el("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:"10px"}});
   nums.appendChild(el("div",{},[el("div",{style:{fontFamily:"'Bebas Neue'",fontSize:"38px",color:groupHit?"#10b981":"#f59e0b",lineHeight:"1"}},[groupTotal.toLocaleString()]),el("div",{style:{fontSize:"10px",color:"#444"}},["TOTAL REPS"])]));
@@ -346,7 +334,7 @@ function renderCrew(myColor){
   var pb=el("div",{style:{background:"#1a1a1a",borderRadius:"8px",height:"10px",overflow:"hidden",marginBottom:"6px"}});
   pb.appendChild(el("div",{style:{height:"100%",width:groupPct+"%",background:groupHit?"linear-gradient(90deg,#10b981,#34d399)":"linear-gradient(90deg,#f59e0b,#fbbf24)",borderRadius:"8px",transition:"width 0.6s ease"}}));
   card.appendChild(pb);
-  card.appendChild(el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:"10px",color:"#444",marginBottom:"14px"}},[el("span",{},[Math.round(groupPct)+"% of goal"]),el("span",{},[groupHit?"COMPLETE!":((challenge.goal-groupTotal).toLocaleString()+" to go")])]));
+  card.appendChild(el("div",{style:{display:"flex",justifyContent:"space-between",fontSize:"10px",color:"#444",marginBottom:"14px"}},[el("span",{},[Math.round(groupPct)+"% of goal"]),el("span",{},[groupHit?"🏆 COMPLETE!":((challenge.goal-groupTotal).toLocaleString()+" to go")])]));
   var stack=el("div",{style:{display:"flex",borderRadius:"6px",overflow:"hidden",height:"8px",marginBottom:"8px"}});
   members.filter(function(m){return m.allReps>0;}).forEach(function(m){stack.appendChild(el("div",{style:{height:"100%",width:((m.allReps/Math.max(groupTotal,1))*100)+"%",background:m.color}}));});
   card.appendChild(stack);
@@ -356,14 +344,13 @@ function renderCrew(myColor){
   wrap.appendChild(el("div",{style:{fontSize:"11px",color:"#444",letterSpacing:"0.15em",marginBottom:"12px"}},["TODAY'S LEADERBOARD"]));
   var lb=el("div",{style:{display:"flex",flexDirection:"column",gap:"8px",marginBottom:"28px"}});
   members.forEach(function(m,i){
-    var pct=Math.min((m.todayReps/Math.max(m.goal,1))*100,100);
-    var hit=m.todayReps>=m.goal;var isMe=m.name===currentUser;
+    var pct=Math.min((m.todayReps/Math.max(m.goal,1))*100,100);var hit=m.todayReps>=m.goal;var isMe=m.name===currentUser;
     var c=el("div",{style:{background:isMe?"#111":"#0d0d0d",border:"1px solid "+(isMe?m.color+"55":"#1a1a1a"),borderRadius:"12px",padding:"12px 16px"}});
     var row=el("div",{style:{display:"flex",alignItems:"center",gap:"12px",marginBottom:"8px"}});
-    row.appendChild(el("div",{style:{fontFamily:"'Bebas Neue'",fontSize:"20px",color:i===0?"#f59e0b":"#2a2a2a",minWidth:"22px"}},[i===0?"1st":i===1?"2nd":i===2?"3rd":String(i+1)]));
+    row.appendChild(el("div",{style:{fontFamily:"'Bebas Neue'",fontSize:"20px",color:i===0?"#f59e0b":"#2a2a2a",minWidth:"22px"}},[i===0?"🥇":i===1?"🥈":i===2?"🥉":String(i+1)]));
     row.appendChild(Avatar(m.name,m.color,30));
     row.appendChild(el("div",{style:{flex:"1"}},[el("div",{style:{fontSize:"13px",color:isMe?"#e8e8e8":"#777",fontWeight:isMe?"700":"400"}},[m.name+(isMe?" (you)":"")]),el("div",{style:{fontSize:"10px",color:"#333"}},["goal: "+m.goal])]));
-    row.appendChild(el("div",{style:{textAlign:"right"}},[el("div",{style:{fontFamily:"'Bebas Neue'",fontSize:"26px",color:hit?"#10b981":m.color,lineHeight:"1"}},[String(m.todayReps)]),hit?el("div",{style:{fontSize:"9px",color:"#10b981"}},["DONE"]):el("span",{})]));
+    row.appendChild(el("div",{style:{textAlign:"right"}},[el("div",{style:{fontFamily:"'Bebas Neue'",fontSize:"26px",color:hit?"#10b981":m.color,lineHeight:"1"}},[String(m.todayReps)]),hit?el("div",{style:{fontSize:"9px",color:"#10b981"}},["✓ DONE"]):el("span",{})]));
     var p=el("div",{style:{background:"#1a1a1a",borderRadius:"6px",height:"5px",overflow:"hidden"}});
     p.appendChild(el("div",{style:{height:"100%",width:pct+"%",background:hit?"#10b981":m.color,borderRadius:"6px",transition:"width 0.5s ease"}}));
     c.appendChild(row);c.appendChild(p);lb.appendChild(c);
@@ -374,7 +361,7 @@ function renderCrew(myColor){
   members.forEach(function(m){
     var h=maxWeek>0?Math.max((m.weekTotal/maxWeek)*100,m.weekTotal>0?4:0):0;
     var col=el("div",{style:{flex:"1",display:"flex",flexDirection:"column",alignItems:"center",gap:"4px"}});
-    col.appendChild(el("div",{style:{fontSize:"11px",color:m.color,fontFamily:"monospace"}},[m.weekTotal||""]));
+    col.appendChild(el("div",{style:{fontSize:"11px",color:m.color,fontFamily:"monospace"}},[String(m.weekTotal||"")]));
     var bw=el("div",{style:{width:"100%",height:"80px",display:"flex",alignItems:"flex-end",justifyContent:"center"}});
     bw.appendChild(el("div",{style:{width:"62%",height:h+"%",background:m.color,borderRadius:"4px 4px 0 0",transition:"height 0.5s ease",minHeight:m.weekTotal>0?"4px":"0",opacity:m.name===currentUser?"1":"0.5"}}));
     col.appendChild(bw);
@@ -393,11 +380,8 @@ function render(){
   var myColor=memberColor(currentUser,allNames);
   var app=el("div",{className:"app"});
   var header=el("div",{style:{width:"100%",maxWidth:"420px",padding:"26px 20px 0",display:"flex",justifyContent:"space-between",alignItems:"flex-end"}});
-  header.appendChild(el("div",{},[
-    el("div",{style:{fontSize:"10px",letterSpacing:"0.2em",color:"#444"}},["FAMILY CREW"]),
-    el("div",{style:{fontFamily:"'Bebas Neue'",fontSize:"42px",color:myColor,lineHeight:"1",letterSpacing:"2px"}},["PUSH-UPS"])
-  ]));
-  header.appendChild(el("button",{style:{display:"flex",alignItems:"center",gap:"8px",background:"none",border:"1px solid #1e1e1e",borderRadius:"20px",padding:"6px 14px",color:"#555",fontFamily:"inherit",fontSize:"11px",cursor:"pointer"},onClick:function(){clearSession();currentUser=null;render();}},[Avatar(currentUser,myColor,22),currentUser]));
+  header.appendChild(el("div",{},[el("div",{style:{fontSize:"10px",letterSpacing:"0.2em",color:"#444"}},["FAMILY CREW"]),el("div",{style:{fontFamily:"'Bebas Neue'",fontSize:"42px",color:myColor,lineHeight:"1",letterSpacing:"2px"}},["PUSH-UPS"])]));
+  header.appendChild(el("button",{style:{display:"flex",alignItems:"center",gap:"8px",background:"none",border:"1px solid #1e1e1e",borderRadius:"20px",padding:"6px 14px",color:"#555",fontFamily:"inherit",fontSize:"11px",cursor:"pointer"},onClick:function(){localStorage.removeItem(SESSION_KEY);currentUser=null;render();}},[Avatar(currentUser,myColor,22),currentUser]));
   app.appendChild(header);
   app.appendChild(renderNav(myColor));
   if(currentView==="today")app.appendChild(renderToday(myColor));
@@ -408,7 +392,7 @@ function render(){
   root.appendChild(app);
 }
 
-render();
+startListening();
 </script>
 </body>
 </html>
