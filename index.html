@@ -40,14 +40,14 @@ var currentView="today";
 var justCelebrated=false;
 var prevTodayCount=0;
 var unsubscribe=null;
-
+ 
 function memberColor(name,allNames){return COLORS[allNames.slice().sort().indexOf(name)%COLORS.length];}
 function todayKey(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
-
+ 
 function saveToFirebase(){
   return db.collection("family").doc("shared").set(shared);
 }
-
+ 
 function startListening(){
   if(unsubscribe)unsubscribe();
   unsubscribe=db.collection("family").doc("shared").onSnapshot(function(snap){
@@ -58,7 +58,7 @@ function startListening(){
     render();
   });
 }
-
+ 
 function el(tag,props,children){
   var e=document.createElement(tag);
   if(!props)props={};
@@ -76,7 +76,7 @@ function el(tag,props,children){
   });
   return e;
 }
-
+ 
 function showConfetti(){
   var colors=["#f59e0b","#10b981","#3b82f6","#f43f5e","#a855f7","#fff","#fb923c"];
   var wrap=el("div",{style:{position:"fixed",inset:"0",pointerEvents:"none",zIndex:"200"}});
@@ -86,12 +86,12 @@ function showConfetti(){
   document.body.appendChild(wrap);
   setTimeout(function(){wrap.remove();},4000);
 }
-
+ 
 function Avatar(name,color,size){
   if(!size)size=32;
   return el("div",{style:{width:size+"px",height:size+"px",borderRadius:"50%",background:color,flexShrink:"0",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Bebas Neue'",fontSize:(size*.55)+"px",color:"#000"}},[name[0].toUpperCase()]);
 }
-
+ 
 function StatCard(label,value,unit,color){
   if(!color)color="#f59e0b";
   return el("div",{style:{background:"#0f0f0f",border:"1px solid #1e1e1e",borderRadius:"12px",padding:"16px"}},[
@@ -100,7 +100,7 @@ function StatCard(label,value,unit,color){
     el("div",{style:{fontSize:"10px",color:"#555",marginTop:"2px"}},[unit])
   ]);
 }
-
+ 
 function BarEl(value,max,color,label,goal){
   var h=max>0?Math.max((value/max)*100,value>0?4:0):0;
   var hit=goal&&value>=goal;
@@ -112,7 +112,7 @@ function BarEl(value,max,color,label,goal){
     el("div",{style:{fontSize:"10px",color:"#666",textAlign:"center",maxWidth:"40px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},[label])
   ]);
 }
-
+ 
 function getStats(){
   var log=(shared.users[currentUser]||{}).log||{};
   var now=new Date();
@@ -125,7 +125,7 @@ function getStats(){
   for(var m=0;m<=now.getMonth();m++){var yt=0;var days=new Date(now.getFullYear(),m+1,0).getDate();for(var d4=1;d4<=days;d4++){yt+=log[now.getFullYear()+"-"+String(m+1).padStart(2,"0")+"-"+String(d4).padStart(2,"0")]||0;}yearMonths.push({label:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][m],total:yt});}
   return{week:week,weeks:weeks,monthTotal:monthTotal,yearTotal:yearMonths.reduce(function(a,b){return a+b.total;},0),yearMonths:yearMonths};
 }
-
+ 
 function updateMy(fn){
   var prev=shared.users[currentUser]||{goal:50,log:{}};
   var newUsers=Object.assign({},shared.users);
@@ -133,7 +133,7 @@ function updateMy(fn){
   shared=Object.assign({},shared,{users:newUsers});
   saveToFirebase();
 }
-
+ 
 function renderLogin(){
   var allNames=Object.keys(shared.users);
   var mode=allNames.length>0?"existing":"new";
@@ -178,7 +178,7 @@ function renderLogin(){
   wrap.appendChild(inner);
   return wrap;
 }
-
+ 
 function doLogin(name){
   localStorage.setItem(SESSION_KEY,name);
   currentUser=name;justCelebrated=false;prevTodayCount=0;
@@ -191,7 +191,7 @@ function doLogin(name){
     render();
   }
 }
-
+ 
 function renderNav(myColor){
   var nav=el("div",{style:{display:"flex",gap:"2px",margin:"16px 20px 0",background:"#111",borderRadius:"8px",padding:"3px",width:"calc(100% - 40px)",maxWidth:"414px"}});
   ["today","week","month","year","crew"].forEach(function(v){
@@ -200,7 +200,7 @@ function renderNav(myColor){
   });
   return nav;
 }
-
+ 
 function renderToday(myColor){
   var myData=shared.users[currentUser]||{goal:50,log:{}};
   var today=todayKey();
@@ -248,7 +248,7 @@ function renderToday(myColor){
   wrap.appendChild(el("button",{style:{width:"100%",padding:"10px",background:"none",border:"1px solid #181818",color:"#2a2a2a",fontFamily:"inherit",fontSize:"11px",letterSpacing:"0.15em",borderRadius:"8px",cursor:"pointer"},onClick:function(){if(confirm("Reset today's count?")){updateMy(function(d){var nd=Object.assign({},d);nd.log=Object.assign({},d.log);nd.log[today]=0;return nd;});justCelebrated=false;}}},["RESET TODAY"]));
   return wrap;
 }
-
+ 
 function renderWeek(myColor){
   var stats=getStats();var week=stats.week;
   var myData=shared.users[currentUser]||{goal:50,log:{}};var goal=myData.goal||50;var today=todayKey();
@@ -265,7 +265,7 @@ function renderWeek(myColor){
   [StatCard("Weekly total",total,"reps",myColor),StatCard("Daily avg",Math.round(total/7),"reps/day",myColor),StatCard("Best day",bestDay,"reps",myColor),StatCard("Goal days",week.filter(function(d){return d.count>=goal;}).length,"/ 7","#10b981")].forEach(function(c){grid.appendChild(c);});
   wrap.appendChild(grid);return wrap;
 }
-
+ 
 function renderMonth(myColor){
   var stats=getStats();var weeks=stats.weeks;var monthTotal=stats.monthTotal;
   var myData=shared.users[currentUser]||{goal:50,log:{}};var goal=myData.goal||50;
@@ -280,7 +280,7 @@ function renderMonth(myColor){
   [StatCard("Monthly total",monthTotal,"reps",myColor),StatCard("Weekly avg",Math.round(monthTotal/4),"reps/wk",myColor),StatCard("Goal weeks",weeks.filter(function(w){return w.total>=goal*7;}).length,"/ 4 wks","#10b981"),StatCard("Daily avg",Math.round(monthTotal/new Date().getDate()),"reps/day",myColor)].forEach(function(c){grid.appendChild(c);});
   wrap.appendChild(grid);return wrap;
 }
-
+ 
 function renderYear(myColor){
   var stats=getStats();var yearMonths=stats.yearMonths;var yearTotal=stats.yearTotal;
   var maxVal=1;yearMonths.forEach(function(m){if(m.total>maxVal)maxVal=m.total;});
@@ -296,7 +296,7 @@ function renderYear(myColor){
   [StatCard("Year total",yearTotal.toLocaleString(),"reps",myColor),StatCard("Monthly avg",Math.round(yearTotal/Math.max(new Date().getMonth()+1,1)),"reps/mo",myColor),StatCard("Best month",bestMo,"reps",myColor),StatCard("On pace for",pace.toLocaleString(),"/ yr","#10b981")].forEach(function(c){grid.appendChild(c);});
   wrap.appendChild(grid);return wrap;
 }
-
+ 
 function renderCrew(myColor){
   var today=todayKey();var now=new Date();
   var allNames=Object.keys(shared.users);
@@ -371,7 +371,7 @@ function renderCrew(myColor){
     hth.appendChild(col);
   });
   wrap.appendChild(hth);
-
+ 
   // Admin section
   if(currentUser===adminName){
     var adminSection=el("div",{style:{marginTop:"8px",marginBottom:"32px",background:"#0f0f0f",border:"1px solid #2a2a2a",borderRadius:"16px",padding:"20px"}});
@@ -403,10 +403,10 @@ function renderCrew(myColor){
     }},["Become admin"]));
     wrap.appendChild(claimBtn);
   }
-
+ 
   return wrap;
 }
-
+ 
 function render(){
   var root=document.getElementById("root");
   root.innerHTML="";
@@ -426,7 +426,7 @@ function render(){
   else if(currentView==="crew")app.appendChild(renderCrew(myColor));
   root.appendChild(app);
 }
-
+ 
 startListening();
 </script>
 </body>
