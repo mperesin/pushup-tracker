@@ -32,6 +32,8 @@ firebase.initializeApp({
 var db=firebase.firestore();
 var SESSION_KEY="family-pushup-session";
 var COLORS=["#f59e0b","#3b82f6","#f43f5e","#a855f7","#10b981","#fb923c","#06b6d4","#ec4899"];
+var ADMIN_KEY="family-pushup-admin";
+var adminName=localStorage.getItem(ADMIN_KEY)||null;
 var shared={users:{},groupChallenge:{goal:1000,name:"Family Challenge"}};
 var currentUser=localStorage.getItem(SESSION_KEY)||null;
 var currentView="today";
@@ -40,7 +42,7 @@ var prevTodayCount=0;
 var unsubscribe=null;
 
 function memberColor(name,allNames){return COLORS[allNames.slice().sort().indexOf(name)%COLORS.length];}
-function todayKey(){return new Date().toISOString().split("T")[0];}
+function todayKey(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 
 function saveToFirebase(){
   return db.collection("family").doc("shared").set(shared);
@@ -369,6 +371,39 @@ function renderCrew(myColor){
     hth.appendChild(col);
   });
   wrap.appendChild(hth);
+
+  // Admin section
+  if(currentUser===adminName){
+    var adminSection=el("div",{style:{marginTop:"8px",marginBottom:"32px",background:"#0f0f0f",border:"1px solid #2a2a2a",borderRadius:"16px",padding:"20px"}});
+    adminSection.appendChild(el("div",{style:{fontSize:"11px",color:"#444",letterSpacing:"0.15em",marginBottom:"16px"}},["ADMIN - MANAGE CREW"]));
+    members.forEach(function(m){
+      if(m.name===adminName)return;
+      var row2=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #1a1a1a"}});
+      row2.appendChild(el("div",{style:{display:"flex",alignItems:"center",gap:"10px"}},[Avatar(m.name,m.color,28),el("div",{style:{fontSize:"13px",color:"#888"}},[m.name])]));
+      var removeBtn=el("button",{style:{background:"none",border:"1px solid #f43f5e44",color:"#f43f5e",fontFamily:"inherit",fontSize:"11px",padding:"4px 12px",borderRadius:"6px",cursor:"pointer"},onClick:function(){
+        if(confirm("Remove "+m.name+" from the crew? This will delete all their data.")){
+          var newUsers=Object.assign({},shared.users);
+          delete newUsers[m.name];
+          shared=Object.assign({},shared,{users:newUsers});
+          saveToFirebase();
+        }
+      }},["Remove"]);
+      row2.appendChild(removeBtn);
+      adminSection.appendChild(row2);
+    });
+    wrap.appendChild(adminSection);
+  } else if(!adminName && currentUser){
+    var claimBtn=el("div",{style:{marginBottom:"32px",textAlign:"center"}});
+    claimBtn.appendChild(el("button",{style:{background:"none",border:"1px solid #2a2a2a",color:"#333",fontFamily:"inherit",fontSize:"10px",padding:"6px 14px",borderRadius:"6px",cursor:"pointer"},onClick:function(){
+      if(confirm("Make "+currentUser+" the admin? Admins can remove crew members.")){
+        localStorage.setItem(ADMIN_KEY,currentUser);
+        adminName=currentUser;
+        render();
+      }
+    }},["Become admin"]));
+    wrap.appendChild(claimBtn);
+  }
+
   return wrap;
 }
 
